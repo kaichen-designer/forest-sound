@@ -483,7 +483,7 @@
         });
 
         // 開始按鈕點擊事件
-        document.getElementById('startButton').addEventListener('click', function() {
+        document.getElementById('startButton').addEventListener('click', async function() {
             // 隱藏遮罩層
             document.getElementById('startOverlay').classList.add('hidden');
             initializeAudio();
@@ -491,21 +491,76 @@
             // 確保場景已載入
             const scene = document.querySelector('a-scene');
             
-            // 等待場景載入後，啟動 AR 檢查
-            // AR.js 會在場景載入時自動嘗試初始化相機
-            if (scene.hasLoaded) {
-                console.log('Scene already loaded, starting AR check');
-                setTimeout(() => {
-                    startAR();
-                }, 1500);
-            } else {
-                scene.addEventListener('loaded', function() {
-                    console.log('Scene loaded, starting AR check');
-                    setTimeout(() => {
-                        startAR();
-                    }, 1500);
+            // 等待場景載入
+            const waitForScene = () => {
+                return new Promise((resolve) => {
+                    if (scene.hasLoaded) {
+                        resolve();
+                    } else {
+                        scene.addEventListener('loaded', resolve, { once: true });
+                    }
                 });
+            };
+            
+            await waitForScene();
+            console.log('Scene loaded, initializing AR...');
+            
+            // 等待 AR.js 系統初始化
+            const waitForARSystem = () => {
+                return new Promise((resolve) => {
+                    let attempts = 0;
+                    const checkInterval = setInterval(() => {
+                        attempts++;
+                        if (scene.systems && scene.systems.arjs) {
+                            clearInterval(checkInterval);
+                            resolve();
+                        } else if (attempts > 20) {
+                            clearInterval(checkInterval);
+                            resolve(); // 即使沒找到也繼續
+                        }
+                    }, 100);
+                });
+            };
+            
+            await waitForARSystem();
+            
+            // 嘗試手動初始化 AR Context
+            if (scene.systems && scene.systems.arjs) {
+                const arSystem = scene.systems.arjs;
+                console.log('AR.js system found, checking context...');
+                
+                // 如果 context 不存在，嘗試觸發初始化
+                if (!arSystem.arContext) {
+                    console.log('AR Context not found, attempting to initialize...');
+                    
+                    // 方法1: 觸發場景的 arjs-ready 事件
+                    scene.emit('arjs-ready');
+                    
+                    // 方法2: 嘗試手動調用初始化方法
+                    if (typeof arSystem.init === 'function') {
+                        try {
+                            arSystem.init();
+                        } catch (e) {
+                            console.error('Failed to init AR system:', e);
+                        }
+                    }
+                    
+                    // 方法3: 觸發場景重新渲染
+                    if (scene.renderer) {
+                        scene.renderer.render(scene.object3D, scene.camera);
+                    }
+                    
+                    // 方法4: 等待 AR.js 自動初始化（給它更多時間）
+                    console.log('Waiting for AR.js to auto-initialize...');
+                } else {
+                    console.log('AR Context already exists');
+                }
             }
+            
+            // 等待一下讓 AR.js 初始化
+            setTimeout(() => {
+                startAR();
+            }, 1500);
         });
 
         // 檢查相機是否正在運行
@@ -907,9 +962,15 @@
             // 檢查 AR.js 系統
             if (scene && scene.systems && scene.systems.arjs) {
                 const arSystem = scene.systems.arjs;
-                const arContext = arSystem.arContext;
                 
                 info += '<div class="success">✓ AR.js 系統已載入</div><br>';
+                
+                // 嘗試多種方式獲取 arContext
+                let arContext = arSystem.arContext;
+                if (!arContext) {
+                    // 嘗試其他可能的屬性名
+                    arContext = arSystem._arContext || arSystem.context;
+                }
                 
                 if (arContext) {
                     info += '<div class="success">✓ AR Context 已初始化</div><br>';
@@ -974,6 +1035,17 @@
                     }
                 } else {
                     info += '<div class="error">✗ AR Context 未初始化</div><br>';
+                    info += '<div style="font-size:10px;">提示: 請確保已點擊"點擊開始"按鈕</div><br>';
+                    
+                    // 嘗試檢查是否可以手動初始化
+                    if (arSystem && typeof arSystem.init === 'function') {
+                        info += '<div style="font-size:10px;">嘗試手動初始化...</div><br>';
+                        try {
+                            arSystem.init();
+                        } catch (e) {
+                            info += `<div class="error" style="font-size:10px;">初始化失敗: ${e.message}</div><br>`;
+                        }
+                    }
                 }
             } else {
                 info += '<div class="error">✗ AR.js 系統未找到</div><br>';
