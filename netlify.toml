@@ -1,0 +1,24 @@
+[build]
+  # 這是一個靜態網站，不需要構建步驟
+  publish = "."
+
+[[headers]]
+  # 為所有路由設置 CORS 和緩存頭
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type"
+
+[[headers]]
+  # 為音訊文件設置正確的 MIME 類型和緩存
+  for = "/*.mp3"
+  [headers.values]
+    Content-Type = "audio/mpeg"
+    Cache-Control = "public, max-age=31536000"
+
+[[headers]]
+  # 為 SVG 文件設置正確的 MIME 類型
+  for = "/*.svg"
+  [headers.values]
+    Content-Type = "image/svg+xml"

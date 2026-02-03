@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebAR - Forest Sound</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ar.js@2.2.2/aframe/build/aframe-ar.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #startOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            cursor: pointer;
+        }
+        
+        #startButton {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            font-size: 24px;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        #startButton:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+        }
+        
+        #startButton:active {
+            transform: scale(0.98);
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        a-scene {
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+        
+        #loadingStatus {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 999;
+            display: none;
+        }
+        
+        #loadingStatus.show {
+            display: block;
+        }
+        
+        #errorStatus {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 999;
+            display: none;
+            max-width: 90%;
+            text-align: center;
+            line-height: 1.5;
+        }
+        
+        #errorStatus.show {
+            display: block;
+        }
+        
+        #scanStatus {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 20px;
+            font-size: 16px;
+            z-index: 998;
+            display: none;
+            text-align: center;
+            min-width: 200px;
+        }
+        
+        #scanStatus.show {
+            display: block;
+        }
+        
+        #scanStatus.scanning {
+            background: rgba(33, 150, 243, 0.8);
+            animation: pulse 2s infinite;
+        }
+        
+        #scanStatus.detected {
+            background: rgba(76, 175, 80, 0.9);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+        
+        /* AR.js 調試信息樣式 */
+        .arjs-debug {
+            position: fixed !important;
+            top: 10px !important;
+            left: 10px !important;
+            z-index: 1000 !important;
+            background: rgba(0, 0, 0, 0.7) !important;
+            color: white !important;
+            padding: 10px !important;
+            font-size: 12px !important;
+            border-radius: 5px !important;
+        }
+        
+        /* 自定義調試信息 */
+        #debugInfo {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #0f0;
+            padding: 10px;
+            font-size: 11px;
+            font-family: monospace;
+            z-index: 1001;
+            border-radius: 5px;
+            max-width: 300px;
+            line-height: 1.4;
+            display: none;
+        }
+        
+        #debugInfo.show {
+            display: block;
+        }
+        
+        #debugInfo .error {
+            color: #f00;
+        }
+        
+        #debugInfo .success {
+            color: #0f0;
+        }
+        
+        #debugInfo .warning {
+            color: #ff0;
+        }
+        
+        /* 使用說明 */
+        #instructions {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 15px;
+            font-size: 13px;
+            z-index: 997;
+            display: none;
+            max-width: 90%;
+            text-align: center;
+            line-height: 1.6;
+        }
+        
+        #instructions.show {
+            display: block;
+        }
+        
+        #instructions strong {
+            color: #4CAF50;
+        }
+        
+        /* 掃描框 */
+        #scanFrame {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 250px;
+            height: 250px;
+            border: 3px solid #4CAF50;
+            border-radius: 10px;
+            z-index: 995;
+            pointer-events: none;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5),
+                        0 0 20px rgba(76, 175, 80, 0.8);
+            display: none;
+            animation: scanPulse 2s infinite;
+        }
+        
+        #scanFrame.show {
+            display: block;
+        }
+        
+        #scanFrame.detecting {
+            border-color: #2196F3;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5),
+                        0 0 20px rgba(33, 150, 243, 0.8);
+            animation: scanPulse 1s infinite;
+        }
+        
+        #scanFrame.detected {
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.3),
+                        0 0 30px rgba(76, 175, 80, 1);
+            animation: scanSuccess 0.5s;
+        }
+        
+        @keyframes scanPulse {
+            0%, 100% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            50% {
+                opacity: 0.7;
+                transform: translate(-50%, -50%) scale(1.05);
+            }
+        }
+        
+        @keyframes scanSuccess {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.1);
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+        
+        /* 掃描框四個角的裝飾 */
+        #scanFrame::before,
+        #scanFrame::after {
+            content: '';
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 4px solid #4CAF50;
+        }
+        
+        #scanFrame::before {
+            top: -4px;
+            left: -4px;
+            border-right: none;
+            border-bottom: none;
+            border-top-left-radius: 10px;
+        }
+        
+        #scanFrame::after {
+            bottom: -4px;
+            right: -4px;
+            border-left: none;
+            border-top: none;
+            border-bottom-right-radius: 10px;
+        }
+        
+        #scanFrame .corner-top-right,
+        #scanFrame .corner-bottom-left {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 4px solid #4CAF50;
+        }
+        
+        #scanFrame .corner-top-right {
+            top: -4px;
+            right: -4px;
+            border-left: none;
+            border-bottom: none;
+            border-top-right-radius: 10px;
+        }
+        
+        #scanFrame .corner-bottom-left {
+            bottom: -4px;
+            left: -4px;
+            border-right: none;
+            border-top: none;
+            border-bottom-left-radius: 10px;
+        }
+        
+        /* 檢測狀態時改變角的顏色 */
+        #scanFrame.detecting::before,
+        #scanFrame.detecting::after,
+        #scanFrame.detecting .corner-top-right,
+        #scanFrame.detecting .corner-bottom-left {
+            border-color: #2196F3;
+        }
+        
+        #scanFrame.detected::before,
+        #scanFrame.detected::after,
+        #scanFrame.detected .corner-top-right,
+        #scanFrame.detected .corner-bottom-left {
+            border-color: #4CAF50;
+        }
+        
+        /* 對準提示文字 */
+        #alignHint {
+            position: fixed;
+            top: calc(50% + 140px);
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 16px;
+            text-align: center;
+            z-index: 996;
+            display: none;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 15px;
+            border-radius: 20px;
+        }
+        
+        #alignHint.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- 開始遮罩層 -->
+    <div id="startOverlay">
+        <button id="startButton">點擊開始</button>
+    </div>
+    
+    <!-- 載入狀態指示 -->
+    <div id="loadingStatus">正在初始化 AR...</div>
+    
+    <!-- 錯誤狀態指示 -->
+    <div id="errorStatus"></div>
+    
+    <!-- 掃描狀態指示 -->
+    <div id="scanStatus">正在掃描 Marker...</div>
+    
+    <!-- 使用說明 -->
+    <div id="instructions">
+        <strong>📱 使用提示：</strong><br>
+        1. 確保光線充足<br>
+        2. 將 Marker 完整顯示在畫面中<br>
+        3. 保持手機穩定，距離約 20-30 公分<br>
+        4. 左上角會顯示檢測狀態
+    </div>
+    
+    <!-- 掃描框 -->
+    <div id="scanFrame">
+        <div class="corner-top-right"></div>
+        <div class="corner-bottom-left"></div>
+    </div>
+    
+    <!-- 對準提示 -->
+    <div id="alignHint">將 Marker 對準此框內</div>
+    
+    <!-- 調試信息 -->
+    <div id="debugInfo"></div>
+
+    <!-- AR 場景 -->
+    <a-scene 
+        id="arScene"
+        vr-mode-ui="enabled: false"
+        renderer="logarithmicDepthBuffer: true; colorManagement: true;"
+        embedded
+        arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: true; detectionMode: mono_and_matrix; matrixCodeType: 4x4; cameraParametersUrl: https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/data/camera_para.dat; maxDetectionRate: 60; canvasWidth: 640; canvasHeight: 480;">
+        
+        <!-- 相機 -->
+        <a-camera></a-camera>
+
+        <!-- Marker 6 - 鳥叫聲 -->
+        <a-marker 
+            id="marker6"
+            type="barcode" 
+            value="6"
+            raycaster="objects: .clickable"
+            emitevents="true"
+            cursor="fuse: false; rayOrigin: mouse;">
+            
+            <!-- 視覺回饋：半透明方塊 -->
+            <a-box 
+                position="0 0.5 0" 
+                rotation="0 0 0" 
+                scale="0.5 0.5 0.5"
+                material="color: #4CAF50; opacity: 0.5; transparent: true"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 10000">
+            </a-box>
+            
+            <!-- 文字標籤 -->
+            <a-text 
+                value="Bird Sound" 
+                position="0 1 0" 
+                align="center"
+                color="#4CAF50"
+                scale="0.5 0.5 0.5">
+            </a-text>
+        </a-marker>
+
+        <!-- Marker 12 - 河流聲 -->
+        <a-marker 
+            id="marker12"
+            type="barcode" 
+            value="12"
+            raycaster="objects: .clickable"
+            emitevents="true"
+            cursor="fuse: false; rayOrigin: mouse;">
+            
+            <!-- 視覺回饋：半透明方塊 -->
+            <a-box 
+                position="0 0.5 0" 
+                rotation="0 0 0" 
+                scale="0.5 0.5 0.5"
+                material="color: #2196F3; opacity: 0.5; transparent: true"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 10000">
+            </a-box>
+            
+            <!-- 文字標籤 -->
+            <a-text 
+                value="River Sound" 
+                position="0 1 0" 
+                align="center"
+                color="#2196F3"
+                scale="0.5 0.5 0.5">
+            </a-text>
+        </a-marker>
+
+        <!-- 光源 -->
+        <a-light type="ambient" color="#404040"></a-light>
+        <a-light type="directional" position="0 1 0" intensity="0.5"></a-light>
+    </a-scene>
+
+    <script>
+        // 初始化 Tone.js
+        let birdPlayer = null;
+        let riverPlayer = null;
+        let isInitialized = false;
+        let currentMarker = null;
+        let fadeInTime = 2; // 淡入時間（秒）
+        let fadeOutTime = 2; // 淡出時間（秒）
+
+        // 等待 A-Frame 和 AR.js 載入完成
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded');
+            
+            // 檢查 AR.js 是否載入
+            if (typeof AFRAME !== 'undefined' && AFRAME.components['arjs']) {
+                console.log('AR.js loaded successfully');
+            } else {
+                console.warn('AR.js may not be loaded correctly');
+            }
+        });
+
+        // 開始按鈕點擊事件
+        document.getElementById('startButton').addEventListener('click', function() {
+            // 隱藏遮罩層
+            document.getElementById('startOverlay').classList.add('hidden');
+            initializeAudio();
+            
+            // 確保場景已載入
+            const scene = document.querySelector('a-scene');
+            
+            // 等待場景載入後，啟動 AR 檢查
+            // AR.js 會在場景載入時自動嘗試初始化相機
+            if (scene.hasLoaded) {
+                console.log('Scene already loaded, starting AR check');
+                setTimeout(() => {
+                    startAR();
+                }, 1500);
+            } else {
+                scene.addEventListener('loaded', function() {
+                    console.log('Scene loaded, starting AR check');
+                    setTimeout(() => {
+                        startAR();
+                    }, 1500);
+                });
+            }
+        });
+
+        // 檢查相機是否正在運行
+        function isCameraRunning() {
+            // 檢查所有視頻元素
+            const videoElements = document.querySelectorAll('video');
+            for (let video of videoElements) {
+                if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+                    return true;
+                }
+            }
+            
+            // 檢查 AR.js 的視頻元素
+            const scene = document.querySelector('a-scene');
+            if (scene && scene.systems && scene.systems.arjs) {
+                const arContext = scene.systems.arjs.arContext;
+                if (arContext && arContext._video) {
+                    const video = arContext._video;
+                    if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+                        return true;
+                    }
+                }
+            }
+            
+            return false;
+        }
+
+        function startAR() {
+            const scene = document.querySelector('a-scene');
+            const loadingStatus = document.getElementById('loadingStatus');
+            
+            loadingStatus.classList.add('show');
+            loadingStatus.textContent = '正在啟動相機...';
+            
+            // 先快速檢查一次，如果相機已經在運行，立即認為就緒
+            if (isCameraRunning()) {
+                console.log('Camera already running, AR is ready');
+                loadingStatus.textContent = 'AR 已就緒！';
+                setTimeout(() => {
+                    loadingStatus.classList.remove('show');
+                    // 顯示掃描提示
+                    updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+                }, 2000);
+                return;
+            }
+            
+            // 等待 AR.js 系統初始化
+            let checkCount = 0;
+            const maxChecks = 40; // 最多檢查 20 秒 (40 * 500ms)
+            
+            const checkInterval = setInterval(() => {
+                checkCount++;
+                
+                // 每次檢查都先看看相機是否已經在運行
+                if (isCameraRunning()) {
+                    console.log('Camera is running, AR is ready');
+                    loadingStatus.textContent = 'AR 已就緒！';
+                    setTimeout(() => {
+                        loadingStatus.classList.remove('show');
+                    }, 2000);
+                    clearInterval(checkInterval);
+                    return;
+                }
+                
+                const arSystem = scene.systems.arjs;
+                
+                if (arSystem) {
+                    const arContext = arSystem.arContext;
+                    
+                    // 多種方式檢查 AR 是否已初始化
+                    let isInitialized = false;
+                    
+                    // 方法1: 檢查 arSource
+                    if (arContext) {
+                        if (arContext._arSource || arContext.arSource) {
+                            isInitialized = true;
+                            console.log('AR initialized: arSource found');
+                        }
+                        
+                        // 方法2: 檢查視頻元素
+                        if (arContext._video) {
+                            const video = arContext._video;
+                            if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+                                isInitialized = true;
+                                console.log('AR initialized: video ready', video.videoWidth, 'x', video.videoHeight);
+                            }
+                        }
+                    }
+                    
+                    if (isInitialized) {
+                        console.log('AR source initialized successfully');
+                        loadingStatus.textContent = 'AR 已就緒！';
+                        setTimeout(() => {
+                            loadingStatus.classList.remove('show');
+                            // 顯示掃描提示
+                            updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+                            // 開始顯示調試信息
+                            updateDebugInfo();
+                            setInterval(updateDebugInfo, 1000);
+                        }, 2000);
+                        clearInterval(checkInterval);
+                    } else {
+                        // 顯示進度
+                        if (checkCount % 4 === 0) {
+                            const seconds = Math.floor(checkCount * 0.5);
+                            loadingStatus.textContent = `正在啟動相機... (${seconds}秒)`;
+                            
+                            // 輸出調試信息（每 2 秒一次）
+                            if (checkCount % 4 === 0 && arContext) {
+                                console.log('AR context exists, checking initialization...', {
+                                    hasArSource: !!(arContext._arSource || arContext.arSource),
+                                    hasVideo: !!arContext._video,
+                                    videoReady: arContext._video ? arContext._video.readyState : 'N/A',
+                                    videoSize: arContext._video ? `${arContext._video.videoWidth}x${arContext._video.videoHeight}` : 'N/A',
+                                    cameraRunning: isCameraRunning()
+                                });
+                            }
+                        }
+                    }
+                } else {
+                    if (checkCount === 1) {
+                        console.error('AR.js system not found');
+                    }
+                }
+                
+                // 超時處理 - 如果相機已經在運行，就認為已經就緒
+                if (checkCount >= maxChecks) {
+                    clearInterval(checkInterval);
+                    
+                    // 最後一次檢查：如果相機已經在運行，就認為已經就緒
+                    if (isCameraRunning()) {
+                        console.log('Camera is running at timeout, considering AR as ready');
+                        loadingStatus.textContent = 'AR 已就緒！';
+                        setTimeout(() => {
+                            loadingStatus.classList.remove('show');
+                            // 顯示掃描提示
+                            updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+                        }, 2000);
+                    } else {
+                        // 即使超時，也自動隱藏提示，因為可能已經可以使用了
+                        loadingStatus.textContent = 'AR 已就緒！';
+                        console.log('Timeout reached, but hiding status - AR may be functional');
+                        setTimeout(() => {
+                            loadingStatus.classList.remove('show');
+                            // 顯示掃描提示
+                            updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+                        }, 2000);
+                    }
+                }
+            }, 500);
+        }
+
+        // 初始化音訊
+        function initializeAudio() {
+            if (isInitialized) return;
+            
+            // 初始化 Tone.js 上下文（需要用戶交互）
+            Tone.start().then(() => {
+                console.log('Tone.js initialized');
+                
+                // 獲取正確的音訊文件路徑
+                const getAudioPath = (filename) => {
+                    // 如果是相對路徑，確保從當前 HTML 文件的位置開始
+                    const basePath = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+                    return basePath + filename;
+                };
+                
+                const birdPath = getAudioPath('bird.mp3');
+                const riverPath = getAudioPath('river.mp3');
+                
+                console.log('Loading audio files:');
+                console.log('Bird path:', birdPath);
+                console.log('River path:', riverPath);
+                
+                // 創建 bird.mp3 播放器（帶淡入淡出）
+                birdPlayer = new Tone.Player({
+                    url: birdPath,
+                    loop: true,
+                    volume: -100 // 從靜音開始
+                }).toDestination();
+                
+                // 創建 river.mp3 播放器
+                riverPlayer = new Tone.Player({
+                    url: riverPath,
+                    loop: true,
+                    volume: -100 // 從靜音開始
+                }).toDestination();
+                
+                // 預載音訊，分別處理每個文件的載入
+                let birdLoaded = false;
+                let riverLoaded = false;
+                
+                const checkAllLoaded = () => {
+                    if (birdLoaded && riverLoaded) {
+                        console.log('All audio files loaded successfully');
+                        isInitialized = true;
+                        console.log('Audio initialized and ready');
+                    }
+                };
+                
+                birdPlayer.load()
+                    .then(() => {
+                        console.log('Bird audio loaded successfully');
+                        birdLoaded = true;
+                        checkAllLoaded();
+                    })
+                    .catch(err => {
+                        console.error('Failed to load bird.mp3:', err);
+                        console.error('Tried path:', birdPath);
+                        birdLoaded = true; // 標記為已處理，避免阻塞
+                        checkAllLoaded();
+                        // 不立即顯示錯誤，等兩個文件都嘗試載入後再顯示
+                    });
+                
+                riverPlayer.load()
+                    .then(() => {
+                        console.log('River audio loaded successfully');
+                        riverLoaded = true;
+                        checkAllLoaded();
+                    })
+                    .catch(err => {
+                        console.error('Failed to load river.mp3:', err);
+                        console.error('Tried path:', riverPath);
+                        riverLoaded = true; // 標記為已處理，避免阻塞
+                        checkAllLoaded();
+                    });
+                
+                // 等待一段時間後檢查是否載入成功
+                setTimeout(() => {
+                    if (!isInitialized) {
+                        console.warn('Audio files may not have loaded. Checking...');
+                        const birdReady = birdPlayer && birdPlayer.loaded !== false;
+                        const riverReady = riverPlayer && riverPlayer.loaded !== false;
+                        
+                        if (!birdReady || !riverReady) {
+                            const errorStatus = document.getElementById('errorStatus');
+                            let errorMsg = '⚠️ 無法載入音訊文件<br>';
+                            errorMsg += '請使用 HTTP 服務器運行（不要直接用 file:// 打開）<br>';
+                            errorMsg += '詳見控制台說明';
+                            
+                            errorStatus.innerHTML = errorMsg;
+                            errorStatus.classList.add('show');
+                            
+                            let consoleMsg = '無法載入音訊文件。\n\n';
+                            consoleMsg += '請確認：\n';
+                            consoleMsg += '1. bird.mp3 和 river.mp3 文件與 index.html 在同一目錄\n';
+                            consoleMsg += '2. 使用 HTTP 服務器運行（不要直接用 file:// 打開）\n';
+                            consoleMsg += '3. 檢查瀏覽器控制台的錯誤訊息\n\n';
+                            consoleMsg += '建議使用本地服務器：\n';
+                            consoleMsg += '- Python: python -m http.server 8000\n';
+                            consoleMsg += '- Node.js: npx http-server\n';
+                            consoleMsg += '- VS Code: 使用 Live Server 擴展\n';
+                            consoleMsg += '然後訪問 http://localhost:8000';
+                            
+                            console.error('Audio loading failed:', {
+                                birdReady: birdReady,
+                                riverReady: riverReady,
+                                birdPath: birdPath,
+                                riverPath: riverPath
+                            });
+                            
+                            console.error(consoleMsg);
+                            
+                            // 即使載入失敗，也標記為已初始化，允許繼續使用（可能只是路徑問題）
+                            isInitialized = true;
+                            
+                            // 10秒後自動隱藏錯誤提示
+                            setTimeout(() => {
+                                errorStatus.classList.remove('show');
+                            }, 10000);
+                        } else {
+                            isInitialized = true;
+                            console.log('Audio initialized (delayed check)');
+                        }
+                    }
+                }, 3000);
+            }).catch(err => {
+                console.error('Failed to initialize Tone.js:', err);
+            });
+        }
+
+        // 淡入播放音訊
+        function fadeInPlay(player, targetVolume = 0.5) {
+            if (!player || !isInitialized) {
+                console.warn('Cannot play audio: player=', !!player, 'isInitialized=', isInitialized);
+                return;
+            }
+            
+            // 檢查音訊是否已載入
+            if (player.loaded === false) {
+                console.warn('Audio not loaded yet, waiting...');
+                player.load().then(() => {
+                    console.log('Audio loaded, starting playback');
+                    player.volume.value = -100; // 從靜音開始
+                    player.start();
+                    // 淡入
+                    player.volume.rampTo(Tone.gainToDb(targetVolume), fadeInTime);
+                }).catch(err => {
+                    console.error('Failed to load audio:', err);
+                });
+                return;
+            }
+            
+            console.log('Starting audio playback with fade in');
+            console.log('Player state:', player.state);
+            console.log('Player loaded:', player.loaded);
+            
+            // 如果已經在播放，先停止
+            if (player.state === 'started') {
+                player.stop();
+            }
+            
+            player.volume.value = -100; // 從靜音開始（dB）
+            player.start();
+            
+            // 淡入（Tone.js 使用 dB 值，targetVolume 是 0-1 的增益值）
+            const targetDb = Tone.gainToDb(targetVolume);
+            console.log('Fading in to', targetDb, 'dB (gain:', targetVolume, ')');
+            player.volume.rampTo(targetDb, fadeInTime);
+        }
+
+        // 淡出停止音訊
+        function fadeOutStop(player) {
+            if (!player || !isInitialized) return;
+            
+            console.log('Stopping audio with fade out');
+            // 淡出（Tone.js 使用 dB 值）
+            player.volume.rampTo(-100, fadeOutTime);
+            
+            // 淡出完成後停止
+            setTimeout(() => {
+                if (player && player.state === 'started') {
+                    player.stop();
+                    console.log('Audio stopped');
+                }
+            }, fadeOutTime * 1000);
+        }
+
+        // 停止所有音訊
+        function stopAllAudio() {
+            console.log('Stopping all audio');
+            if (birdPlayer && birdPlayer.state === 'started') {
+                console.log('Stopping bird player');
+                fadeOutStop(birdPlayer);
+            }
+            if (riverPlayer && riverPlayer.state === 'started') {
+                console.log('Stopping river player');
+                fadeOutStop(riverPlayer);
+            }
+        }
+
+        // 更新掃描狀態顯示
+        function updateScanStatus(message, type = 'scanning') {
+            const scanStatus = document.getElementById('scanStatus');
+            const scanFrame = document.getElementById('scanFrame');
+            const alignHint = document.getElementById('alignHint');
+            
+            scanStatus.textContent = message;
+            scanStatus.className = 'show ' + type;
+            
+            // 控制掃描框顯示
+            if (type === 'scanning') {
+                scanFrame.classList.add('show', 'detecting');
+                scanFrame.classList.remove('detected');
+                alignHint.classList.add('show');
+                alignHint.textContent = '將 Marker 對準此框內';
+            } else if (type === 'detected') {
+                scanFrame.classList.add('show', 'detected');
+                scanFrame.classList.remove('detecting');
+                alignHint.classList.add('show');
+                alignHint.textContent = '✅ 檢測成功！';
+                // 3秒後恢復掃描狀態
+                setTimeout(() => {
+                    if (scanFrame.classList.contains('detected')) {
+                        scanFrame.classList.remove('detected');
+                        scanFrame.classList.add('detecting');
+                        alignHint.textContent = '將 Marker 對準此框內';
+                    }
+                }, 3000);
+            }
+            
+            // 顯示使用說明（只在開始掃描時顯示一次）
+            const instructions = document.getElementById('instructions');
+            if (type === 'scanning' && !instructions.classList.contains('shown')) {
+                instructions.classList.add('show', 'shown');
+                // 10秒後自動隱藏說明
+                setTimeout(() => {
+                    instructions.classList.remove('show');
+                }, 10000);
+            }
+        }
+
+        // 更新調試信息
+        function updateDebugInfo() {
+            const debugInfo = document.getElementById('debugInfo');
+            const scene = document.querySelector('a-scene');
+            let info = '<div class="success">✓ AR.js 調試信息</div><br>';
+            
+            // 檢查 AR.js 系統
+            if (scene && scene.systems && scene.systems.arjs) {
+                const arSystem = scene.systems.arjs;
+                const arContext = arSystem.arContext;
+                
+                info += '<div class="success">✓ AR.js 系統已載入</div><br>';
+                
+                if (arContext) {
+                    info += '<div class="success">✓ AR Context 已初始化</div><br>';
+                    
+                    // 檢查視頻
+                    if (arContext._video) {
+                        const video = arContext._video;
+                        info += `<div class="success">✓ 視頻: ${video.videoWidth}x${video.videoHeight}</div><br>`;
+                    } else {
+                        info += '<div class="warning">⚠ 視頻未初始化</div><br>';
+                    }
+                    
+                    // 檢查檢測器
+                    if (arContext._arDetector) {
+                        info += '<div class="success">✓ 檢測器已初始化</div><br>';
+                    } else {
+                        info += '<div class="warning">⚠ 檢測器未初始化</div><br>';
+                    }
+                    
+                    // 檢查檢測到的 marker 數量（嘗試多種方式）
+                    let markerCount = 0;
+                    let detectedMarkers = [];
+                    
+                    // 方法1: 檢查 _arDetector.markers
+                    if (arContext._arDetector && arContext._arDetector.markers) {
+                        markerCount = arContext._arDetector.markers.length;
+                        detectedMarkers = arContext._arDetector.markers;
+                    }
+                    // 方法2: 檢查 arDetector
+                    else if (arContext.arDetector && arContext.arDetector.markers) {
+                        markerCount = arContext.arDetector.markers.length;
+                        detectedMarkers = arContext.arDetector.markers;
+                    }
+                    // 方法3: 檢查 _markers
+                    else if (arContext._markers) {
+                        markerCount = arContext._markers.length;
+                        detectedMarkers = arContext._markers;
+                    }
+                    
+                    info += `<div>檢測到的 Marker: <strong>${markerCount}</strong></div><br>`;
+                    
+                    if (markerCount > 0) {
+                        detectedMarkers.forEach((marker, index) => {
+                            const markerId = marker.id || marker.markerId || '未知';
+                            info += `<div class="success">✓ Marker ${index + 1}: ID=${markerId}</div><br>`;
+                        });
+                    } else {
+                        info += '<div class="warning">⚠ 未檢測到任何 Marker</div><br>';
+                        info += '<div style="font-size:10px;">提示: 確保 Marker 在畫面中，光線充足</div><br>';
+                    }
+                    
+                    // 檢查 Marker 元素的可見性
+                    const marker6El = document.getElementById('marker6');
+                    const marker12El = document.getElementById('marker12');
+                    if (marker6El) {
+                        const marker6Visible = marker6El.object3D.visible;
+                        info += `<div>Marker 6 可見: ${marker6Visible ? '✓' : '✗'}</div><br>`;
+                    }
+                    if (marker12El) {
+                        const marker12Visible = marker12El.object3D.visible;
+                        info += `<div>Marker 12 可見: ${marker12Visible ? '✓' : '✗'}</div><br>`;
+                    }
+                } else {
+                    info += '<div class="error">✗ AR Context 未初始化</div><br>';
+                }
+            } else {
+                info += '<div class="error">✗ AR.js 系統未找到</div><br>';
+            }
+            
+            // 檢查 Marker 元素
+            const marker6 = document.getElementById('marker6');
+            const marker12 = document.getElementById('marker12');
+            if (marker6 && marker12) {
+                info += '<div class="success">✓ Marker 元素已載入</div><br>';
+            } else {
+                info += '<div class="error">✗ Marker 元素未找到</div><br>';
+            }
+            
+            debugInfo.innerHTML = info;
+            debugInfo.classList.add('show');
+        }
+
+        // 設置 Marker 檢測事件（在場景載入後）
+        function setupMarkerEvents() {
+            const marker6 = document.getElementById('marker6');
+            const marker12 = document.getElementById('marker12');
+            
+            if (!marker6 || !marker12) {
+                console.warn('Markers not found, retrying...');
+                setTimeout(setupMarkerEvents, 500);
+                return;
+            }
+            
+            console.log('Setting up marker events');
+            
+            // 顯示調試信息
+            updateDebugInfo();
+            // 每 1 秒更新一次調試信息
+            setInterval(updateDebugInfo, 1000);
+            
+            // 顯示掃描提示
+            updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+            
+            // Marker 6 事件
+            marker6.addEventListener('markerFound', function() {
+                console.log('=== Marker 6 detected! ===');
+                console.log('Current marker:', currentMarker);
+                console.log('Bird player:', birdPlayer);
+                console.log('Audio initialized:', isInitialized);
+                
+                updateScanStatus('✅ Marker 6 已檢測到！播放鳥叫聲 🐦', 'detected');
+                
+                if (currentMarker !== 'marker6') {
+                    console.log('Playing bird sound');
+                    stopAllAudio();
+                    currentMarker = 'marker6';
+                    // 等待一下確保前一個音訊已停止
+                    setTimeout(() => {
+                        fadeInPlay(birdPlayer, 0.5);
+                    }, 100);
+                } else {
+                    console.log('Marker 6 already active, skipping');
+                }
+            });
+
+            marker6.addEventListener('markerLost', function() {
+                console.log('Marker 6 lost');
+                updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+                if (currentMarker === 'marker6') {
+                    fadeOutStop(birdPlayer);
+                    currentMarker = null;
+                }
+            });
+
+            // Marker 12 事件
+            marker12.addEventListener('markerFound', function() {
+                console.log('=== Marker 12 detected! ===');
+                console.log('Current marker:', currentMarker);
+                console.log('River player:', riverPlayer);
+                console.log('Audio initialized:', isInitialized);
+                
+                updateScanStatus('✅ Marker 12 已檢測到！播放河流聲 🌊', 'detected');
+                
+                if (currentMarker !== 'marker12') {
+                    console.log('Playing river sound');
+                    stopAllAudio();
+                    currentMarker = 'marker12';
+                    // 等待一下確保前一個音訊已停止
+                    setTimeout(() => {
+                        fadeInPlay(riverPlayer, 0.5);
+                    }, 100);
+                } else {
+                    console.log('Marker 12 already active, skipping');
+                }
+            });
+
+            marker12.addEventListener('markerLost', function() {
+                console.log('Marker 12 lost');
+                updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+                if (currentMarker === 'marker12') {
+                    fadeOutStop(riverPlayer);
+                    currentMarker = null;
+                }
+            });
+            
+            console.log('Marker events set up successfully');
+        }
+
+        // 等待場景載入後設置事件
+        const scene = document.querySelector('a-scene');
+        if (scene.hasLoaded) {
+            setupMarkerEvents();
+        } else {
+            scene.addEventListener('loaded', function() {
+                console.log('Scene loaded, setting up marker events');
+                setupMarkerEvents();
+            });
+        }
+
+        // 頁面卸載時清理
+        window.addEventListener('beforeunload', function() {
+            stopAllAudio();
+            if (birdPlayer) birdPlayer.dispose();
+            if (riverPlayer) riverPlayer.dispose();
+        });
+    </script>
+</body>
+</html>
