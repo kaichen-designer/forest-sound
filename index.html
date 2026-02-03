@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebAR - Forest Sound</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ar.js@2.2.2/aframe/build/aframe-ar.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/2.2.2/aframe/build/aframe-ar.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
     <style>
         body {
@@ -1012,6 +1012,14 @@
                     arContext = arSystem._arContext || arSystem.context;
                 }
                 
+                // 檢查相機是否在運行（不依賴 AR Context）
+                const cameraRunning = isCameraRunning();
+                if (cameraRunning) {
+                    info += '<div class="success">✓ 相機正在運行</div><br>';
+                } else {
+                    info += '<div class="warning">⚠ 相機未運行</div><br>';
+                }
+                
                 if (arContext) {
                     info += '<div class="success">✓ AR Context 已初始化</div><br>';
                     
@@ -1074,8 +1082,15 @@
                         info += `<div>Marker 12 可見: ${marker12Visible ? '✓' : '✗'}</div><br>`;
                     }
                 } else {
-                    info += '<div class="error">✗ AR Context 未初始化</div><br>';
-                    info += '<div style="font-size:10px;">提示: 請確保已點擊"點擊開始"按鈕</div><br>';
+                    info += '<div class="warning">⚠ AR Context 未初始化</div><br>';
+                    
+                    // 即使 Context 未初始化，如果相機在運行，AR 可能仍然可用
+                    if (cameraRunning) {
+                        info += '<div class="success" style="font-size:11px;">✓ 但相機在運行，AR 可能仍可用</div><br>';
+                        info += '<div style="font-size:10px;">提示: 嘗試對準 Marker，即使顯示未初始化也可能能檢測</div><br>';
+                    } else {
+                        info += '<div style="font-size:10px;">提示: 請確保已點擊"點擊開始"並允許相機權限</div><br>';
+                    }
                     
                     // 嘗試檢查是否可以手動初始化
                     if (arSystem && typeof arSystem.init === 'function') {
@@ -1124,6 +1139,10 @@
             
             // 顯示掃描提示
             updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+            
+            // 即使 AR Context 未初始化，也嘗試設置事件監聽器
+            // AR.js 的 Marker 事件可能仍然能正常工作
+            console.log('Marker events will work even if AR Context shows uninitialized');
             
             // Marker 6 事件
             marker6.addEventListener('markerFound', function() {
