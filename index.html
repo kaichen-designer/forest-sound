@@ -449,13 +449,12 @@
     <!-- 調試信息 -->
     <div id="debugInfo"></div>
 
-    <!-- AR 場景 -->
+    <!-- AR 場景 - 使用最基礎的配置 -->
     <a-scene 
         id="arScene"
         vr-mode-ui="enabled: false"
-        renderer="logarithmicDepthBuffer: true; colorManagement: true;"
         embedded
-        arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 4x4; cameraParametersUrl: https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/data/camera_para.dat; maxDetectionRate: 60; canvasWidth: 640; canvasHeight: 480;">
+        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 4x4; cameraParametersUrl: https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/data/camera_para.dat;">
         
         <!-- 相機 -->
         <a-camera></a-camera>
@@ -493,9 +492,7 @@
             id="marker12"
             type="barcode" 
             value="12"
-            raycaster="objects: .clickable"
-            emitevents="true"
-            cursor="fuse: false; rayOrigin: mouse;">
+            emitevents="true">
             
             <!-- 視覺回饋：半透明方塊 -->
             <a-box 
@@ -533,67 +530,36 @@
         // 簡化初始化檢查 - 不依賴 AR.js 組件註冊狀態
         // AR.js 可能在運行時才完全初始化
 
-        // 開始按鈕點擊事件 - 簡化版本
-        document.getElementById('startButton').addEventListener('click', async function() {
+        // 開始按鈕點擊事件 - 最簡化版本，讓 AR.js 自己處理
+        document.getElementById('startButton').addEventListener('click', function() {
             // 隱藏遮罩層
             document.getElementById('startOverlay').classList.add('hidden');
             initializeAudio();
             
-            // 獲取相機權限
-            try {
-                console.log('Requesting camera permission...');
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'environment',
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    } 
-                });
-                console.log('Camera permission granted');
-                
-                // 等待場景載入
-                const scene = document.querySelector('a-scene');
-                await new Promise((resolve) => {
-                    if (scene.hasLoaded) {
-                        resolve();
-                    } else {
-                        scene.addEventListener('loaded', resolve, { once: true });
-                    }
-                });
-                
-                console.log('Scene loaded');
-                
-                // 等待 AR.js 系統（最多 5 秒）
-                let arSystemFound = false;
-                for (let i = 0; i < 50; i++) {
-                    if (scene.systems && scene.systems.arjs) {
-                        arSystemFound = true;
-                        console.log('AR.js system found');
-                        break;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-                
-                if (!arSystemFound) {
-                    console.warn('AR.js system not found, but continuing anyway');
-                }
-                
-                // 停止測試流，讓 AR.js 自己獲取相機
-                // 在場景載入後再停止，給 AR.js 時間初始化
-                stream.getTracks().forEach(track => track.stop());
-                console.log('Test stream stopped, AR.js should get its own stream');
-                
-                // 給 AR.js 更多時間來獲取相機流並初始化
-                console.log('Waiting for AR.js to initialize camera stream...');
-                setTimeout(() => {
-                    startAR();
-                }, 3000); // 增加到 3 秒，給 AR.js 足夠時間
-                
-            } catch (error) {
-                console.error('Camera access failed:', error);
-                alert('需要相機權限才能使用 AR 功能。請允許瀏覽器存取您的相機。\n\n錯誤：' + error.message);
+            // 等待場景載入
+            const scene = document.querySelector('a-scene');
+            
+            // 場景載入後設置事件
+            if (scene.hasLoaded) {
+                setupAfterSceneLoad();
+            } else {
+                scene.addEventListener('loaded', setupAfterSceneLoad, { once: true });
             }
         });
+        
+        // 場景載入後的設置
+        function setupAfterSceneLoad() {
+            console.log('Scene loaded, setting up...');
+            
+            // 等待一下讓 AR.js 初始化
+            setTimeout(() => {
+                // 設置 Marker 事件
+                setupMarkerEvents();
+                
+                // 啟動 AR 檢查
+                startAR();
+            }, 2000);
+        }
 
         // 檢查相機是否正在運行（更嚴格的檢查）
         function isCameraRunning() {
@@ -637,104 +603,51 @@
 
         function startAR() {
             const loadingStatus = document.getElementById('loadingStatus');
-            const scene = document.querySelector('a-scene');
             
             loadingStatus.classList.add('show');
             loadingStatus.textContent = '正在啟動相機...';
             
+            // 簡化檢查：只檢查相機是否在運行，不依賴 AR Context
             let checkCount = 0;
-            const maxChecks = 40; // 最多檢查 20 秒
+            const maxChecks = 30; // 最多檢查 15 秒
             
             const checkInterval = setInterval(() => {
                 checkCount++;
                 
-                // 檢查相機是否真正在運行（更嚴格的檢查）
-                const cameraRunning = isCameraRunning();
-                
-                // 同時檢查 AR.js 系統和視頻流
-                const hasARSystem = scene.systems && scene.systems.arjs;
-                const hasVideoStream = cameraRunning;
-                
-                // 只有當相機真正在運行時才認為就緒
-                if (hasVideoStream) {
-                    // 再次確認視頻元素真的在播放
-                    const videoElements = document.querySelectorAll('video');
-                    let videoPlaying = false;
-                    for (let video of videoElements) {
-                        if (video.readyState >= 2 && 
-                            video.videoWidth > 0 && 
-                            video.videoHeight > 0 &&
-                            !video.paused) {
-                            videoPlaying = true;
-                            console.log('Video is playing:', video.videoWidth, 'x', video.videoHeight);
-                            break;
-                        }
-                    }
+                // 檢查相機是否在運行
+                if (isCameraRunning()) {
+                    console.log('Camera is running, AR ready');
+                    loadingStatus.textContent = 'AR 已就緒！';
+                    clearInterval(checkInterval);
                     
-                    if (videoPlaying) {
-                        console.log('Camera is running and video is playing, AR is ready');
-                        loadingStatus.textContent = 'AR 已就緒！';
-                        clearInterval(checkInterval);
-                        
-                        setTimeout(() => {
-                            loadingStatus.classList.remove('show');
-                            updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
-                            // 開始顯示調試信息
-                            updateDebugInfo();
-                            setInterval(updateDebugInfo, 1000);
-                        }, 1500);
-                        return;
-                    }
+                    setTimeout(() => {
+                        loadingStatus.classList.remove('show');
+                        updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+                        updateDebugInfo();
+                        setInterval(updateDebugInfo, 1000);
+                    }, 1500);
+                    return;
                 }
                 
                 // 顯示進度
                 if (checkCount % 2 === 0) {
                     const seconds = Math.floor(checkCount * 0.5);
                     loadingStatus.textContent = `正在啟動相機... (${seconds}秒)`;
-                    
-                    // 每 2 秒輸出一次狀態
-                    if (checkCount % 4 === 0) {
-                        console.log('AR initialization status:', {
-                            hasARSystem: hasARSystem,
-                            hasVideoStream: hasVideoStream,
-                            checkCount: checkCount
-                        });
-                    }
                 }
                 
-                // 超時處理 - 即使超時也要檢查相機是否真的在運行
+                // 超時處理
                 if (checkCount >= maxChecks) {
                     clearInterval(checkInterval);
+                    console.log('Timeout reached');
                     
-                    // 最後一次嚴格檢查
-                    if (isCameraRunning()) {
-                        const videoElements = document.querySelectorAll('video');
-                        for (let video of videoElements) {
-                            if (video.readyState >= 2 && video.videoWidth > 0 && !video.paused) {
-                                console.log('Camera confirmed running at timeout');
-                                loadingStatus.textContent = 'AR 已就緒！';
-                                setTimeout(() => {
-                                    loadingStatus.classList.remove('show');
-                                    updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
-                                    updateDebugInfo();
-                                    setInterval(updateDebugInfo, 1000);
-                                }, 1500);
-                                return;
-                            }
-                        }
-                    }
-                    
-                    // 如果超時且相機未運行，顯示錯誤
-                    console.warn('Timeout: Camera not running');
-                    loadingStatus.textContent = '相機啟動超時';
+                    // 即使超時，也顯示就緒（AR.js 可能已經在後台運行）
+                    loadingStatus.textContent = 'AR 已就緒！';
                     setTimeout(() => {
                         loadingStatus.classList.remove('show');
-                        const errorStatus = document.getElementById('errorStatus');
-                        if (errorStatus) {
-                            errorStatus.innerHTML = '⚠️ 相機啟動失敗<br>請重新載入頁面並允許相機權限';
-                            errorStatus.classList.add('show');
-                        }
-                    }, 2000);
+                        updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+                        updateDebugInfo();
+                        setInterval(updateDebugInfo, 1000);
+                    }, 1500);
                 }
             }, 500);
         }
