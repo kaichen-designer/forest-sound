@@ -551,9 +551,6 @@
                 });
                 console.log('Camera permission granted');
                 
-                // 停止測試流，讓 AR.js 自己獲取
-                stream.getTracks().forEach(track => track.stop());
-                
                 // 等待場景載入
                 const scene = document.querySelector('a-scene');
                 await new Promise((resolve) => {
@@ -581,10 +578,16 @@
                     console.warn('AR.js system not found, but continuing anyway');
                 }
                 
-                // 直接啟動 AR 檢查（不依賴 AR Context 狀態）
+                // 停止測試流，讓 AR.js 自己獲取相機
+                // 在場景載入後再停止，給 AR.js 時間初始化
+                stream.getTracks().forEach(track => track.stop());
+                console.log('Test stream stopped, AR.js should get its own stream');
+                
+                // 給 AR.js 更多時間來獲取相機流並初始化
+                console.log('Waiting for AR.js to initialize camera stream...');
                 setTimeout(() => {
                     startAR();
-                }, 1000);
+                }, 3000); // 增加到 3 秒，給 AR.js 足夠時間
                 
             } catch (error) {
                 console.error('Camera access failed:', error);
