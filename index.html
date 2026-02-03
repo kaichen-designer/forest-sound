@@ -5,8 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebAR - Forest Sound</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/2.2.2/aframe/build/aframe-ar.js"></script>
+    <script>
+        // 檢查 A-Frame 是否載入
+        window.addEventListener('load', function() {
+            if (typeof AFRAME === 'undefined') {
+                console.error('A-Frame failed to load!');
+                document.body.innerHTML = '<div style="padding:20px;text-align:center;"><h1>錯誤：A-Frame 載入失敗</h1><p>請檢查網絡連接或重新載入頁面</p></div>';
+            } else {
+                console.log('A-Frame loaded successfully');
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/ar.js@2.2.2/aframe/build/aframe-ar.js" 
+            onerror="console.error('AR.js failed to load!'); document.getElementById('errorStatus').innerHTML='AR.js 載入失敗，請檢查網絡連接'; document.getElementById('errorStatus').classList.add('show');"></script>
     <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
+    <script>
+        // 檢查 AR.js 是否載入
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                if (typeof AFRAME === 'undefined' || !AFRAME.components || !AFRAME.components.arjs) {
+                    console.error('AR.js failed to load!');
+                    const errorStatus = document.getElementById('errorStatus');
+                    if (errorStatus) {
+                        errorStatus.innerHTML = '⚠️ AR.js 載入失敗<br>請檢查網絡連接或重新載入頁面';
+                        errorStatus.classList.add('show');
+                    }
+                } else {
+                    console.log('AR.js loaded successfully');
+                }
+            }, 2000);
+        });
+    </script>
     <style>
         body {
             margin: 0;
@@ -474,12 +503,35 @@
         window.addEventListener('DOMContentLoaded', function() {
             console.log('DOM loaded');
             
-            // 檢查 AR.js 是否載入
-            if (typeof AFRAME !== 'undefined' && AFRAME.components['arjs']) {
-                console.log('AR.js loaded successfully');
-            } else {
-                console.warn('AR.js may not be loaded correctly');
+            // 檢查 A-Frame
+            if (typeof AFRAME === 'undefined') {
+                console.error('A-Frame is not loaded!');
+                const errorStatus = document.getElementById('errorStatus');
+                if (errorStatus) {
+                    errorStatus.innerHTML = '⚠️ A-Frame 載入失敗<br>請檢查網絡連接或重新載入頁面';
+                    errorStatus.classList.add('show');
+                }
+                return;
             }
+            console.log('A-Frame loaded');
+            
+            // 等待 AR.js 載入（可能需要一些時間）
+            let checkCount = 0;
+            const checkARjs = setInterval(function() {
+                checkCount++;
+                if (AFRAME.components && AFRAME.components.arjs) {
+                    console.log('AR.js loaded successfully');
+                    clearInterval(checkARjs);
+                } else if (checkCount > 50) {
+                    console.error('AR.js failed to load after 5 seconds');
+                    clearInterval(checkARjs);
+                    const errorStatus = document.getElementById('errorStatus');
+                    if (errorStatus) {
+                        errorStatus.innerHTML = '⚠️ AR.js 載入超時<br>請重新載入頁面或檢查網絡連接<br>如果問題持續，可能是 CDN 問題';
+                        errorStatus.classList.add('show');
+                    }
+                }
+            }, 100);
         });
 
         // 開始按鈕點擊事件
@@ -540,10 +592,20 @@
                 
                 await waitForARSystem();
                 
+                // 檢查 AR.js 系統是否存在
+                if (!scene.systems || !scene.systems.arjs) {
+                    console.error('AR.js system not found!');
+                    const errorStatus = document.getElementById('errorStatus');
+                    if (errorStatus) {
+                        errorStatus.innerHTML = '⚠️ AR.js 系統未找到<br>請確認 AR.js 已正確載入<br>嘗試重新載入頁面';
+                        errorStatus.classList.add('show');
+                    }
+                    return;
+                }
+                
                 // 強制初始化 AR Context
-                if (scene.systems && scene.systems.arjs) {
-                    const arSystem = scene.systems.arjs;
-                    console.log('AR.js system found, forcing context initialization...');
+                const arSystem = scene.systems.arjs;
+                console.log('AR.js system found, forcing context initialization...');
                     
                     // 嘗試多種方式初始化
                     if (!arSystem.arContext) {
