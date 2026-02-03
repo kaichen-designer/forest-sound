@@ -48,7 +48,41 @@ http-server -p 8000
 2. 右鍵點擊 `index.html`
 3. 選擇 "Open with Live Server"
 
-### 方法 4：部署到 Netlify（手機使用推薦）📱
+### 方法 4：使用 GitHub Pages（推薦，免費且自動）🌐
+
+GitHub Pages 提供免費的 HTTPS 託管，非常適合手機測試！
+
+#### 啟用步驟：
+
+1. **訪問倉庫設置**：
+   - 在 GitHub 上打開你的 `forest-sound` 倉庫
+   - 點擊 "Settings"（設置）
+   - 在左側菜單找到 "Pages"
+
+2. **配置 GitHub Pages**：
+   - Source（來源）：選擇 "GitHub Actions"
+   - 如果沒有看到 "GitHub Actions"，選擇 "Deploy from a branch"
+   - Branch（分支）：選擇 `main`，文件夾選擇 `/ (root)`
+   - 點擊 "Save"
+
+3. **等待部署**：
+   - 第一次設置後，GitHub Actions 會自動部署
+   - 等待幾分鐘讓部署完成
+   - 在 Settings → Pages 頁面會顯示你的網址：
+     `https://kaichen-designer.github.io/forest-sound/`
+
+4. **訪問你的應用**：
+   - 在手機瀏覽器中打開上面的網址即可使用
+   - 每次推送代碼到 GitHub，會自動重新部署
+
+#### 優點：
+- ✅ 完全免費
+- ✅ 自動 HTTPS
+- ✅ 每次推送自動更新
+- ✅ 不需要手動部署
+- ✅ 全球 CDN 加速
+
+### 方法 5：部署到 Netlify（手機使用推薦）📱
 
 這是**在手機上使用的最佳方式**，因為 Netlify 提供免費的 HTTPS，完全符合 AR.js 的需求。
 
