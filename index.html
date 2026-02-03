@@ -4,38 +4,69 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebAR - Forest Sound</title>
+    <!-- A-Frame -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    
+    <!-- AR.js with fallback CDN -->
     <script>
-        // 檢查 A-Frame 是否載入
-        window.addEventListener('load', function() {
+        // 載入 AR.js，帶備用 CDN
+        function loadARjs() {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/ar.js@2.2.2/aframe/build/aframe-ar.js';
+                script.onload = () => {
+                    console.log('AR.js loaded from primary CDN');
+                    resolve();
+                };
+                script.onerror = () => {
+                    console.warn('Primary CDN failed, trying fallback...');
+                    // 備用 CDN
+                    const fallbackScript = document.createElement('script');
+                    fallbackScript.src = 'https://raw.githack.com/AR-js-org/AR.js/2.2.2/aframe/build/aframe-ar.js';
+                    fallbackScript.onload = () => {
+                        console.log('AR.js loaded from fallback CDN');
+                        resolve();
+                    };
+                    fallbackScript.onerror = () => {
+                        console.error('All CDNs failed');
+                        reject(new Error('AR.js failed to load'));
+                    };
+                    document.head.appendChild(fallbackScript);
+                };
+                document.head.appendChild(script);
+            });
+        }
+        
+        // 等待 A-Frame 載入後再載入 AR.js
+        window.addEventListener('load', async function() {
             if (typeof AFRAME === 'undefined') {
                 console.error('A-Frame failed to load!');
-                document.body.innerHTML = '<div style="padding:20px;text-align:center;"><h1>錯誤：A-Frame 載入失敗</h1><p>請檢查網絡連接或重新載入頁面</p></div>';
-            } else {
-                console.log('A-Frame loaded successfully');
+                return;
+            }
+            console.log('A-Frame loaded, loading AR.js...');
+            try {
+                await loadARjs();
+                // 等待 AR.js 註冊組件
+                setTimeout(() => {
+                    if (AFRAME.components && AFRAME.components.arjs) {
+                        console.log('AR.js component registered successfully');
+                    } else {
+                        console.warn('AR.js component not found, but script loaded');
+                    }
+                }, 500);
+            } catch (error) {
+                console.error('Failed to load AR.js:', error);
+                const errorStatus = document.getElementById('errorStatus');
+                if (errorStatus) {
+                    errorStatus.innerHTML = '⚠️ AR.js 載入失敗<br>請檢查網絡連接';
+                    errorStatus.classList.add('show');
+                }
             }
         });
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/ar.js@2.2.2/aframe/build/aframe-ar.js" 
-            onerror="console.error('AR.js failed to load!'); document.getElementById('errorStatus').innerHTML='AR.js 載入失敗，請檢查網絡連接'; document.getElementById('errorStatus').classList.add('show');"></script>
+    
+    <!-- Tone.js -->
     <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
-    <script>
-        // 檢查 AR.js 是否載入
-        window.addEventListener('load', function() {
-            setTimeout(function() {
-                if (typeof AFRAME === 'undefined' || !AFRAME.components || !AFRAME.components.arjs) {
-                    console.error('AR.js failed to load!');
-                    const errorStatus = document.getElementById('errorStatus');
-                    if (errorStatus) {
-                        errorStatus.innerHTML = '⚠️ AR.js 載入失敗<br>請檢查網絡連接或重新載入頁面';
-                        errorStatus.classList.add('show');
-                    }
-                } else {
-                    console.log('AR.js loaded successfully');
-                }
-            }, 2000);
-        });
-    </script>
     <style>
         body {
             margin: 0;
@@ -499,48 +530,16 @@
         let fadeInTime = 2; // 淡入時間（秒）
         let fadeOutTime = 2; // 淡出時間（秒）
 
-        // 等待 A-Frame 和 AR.js 載入完成
-        window.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded');
-            
-            // 檢查 A-Frame
-            if (typeof AFRAME === 'undefined') {
-                console.error('A-Frame is not loaded!');
-                const errorStatus = document.getElementById('errorStatus');
-                if (errorStatus) {
-                    errorStatus.innerHTML = '⚠️ A-Frame 載入失敗<br>請檢查網絡連接或重新載入頁面';
-                    errorStatus.classList.add('show');
-                }
-                return;
-            }
-            console.log('A-Frame loaded');
-            
-            // 等待 AR.js 載入（可能需要一些時間）
-            let checkCount = 0;
-            const checkARjs = setInterval(function() {
-                checkCount++;
-                if (AFRAME.components && AFRAME.components.arjs) {
-                    console.log('AR.js loaded successfully');
-                    clearInterval(checkARjs);
-                } else if (checkCount > 50) {
-                    console.error('AR.js failed to load after 5 seconds');
-                    clearInterval(checkARjs);
-                    const errorStatus = document.getElementById('errorStatus');
-                    if (errorStatus) {
-                        errorStatus.innerHTML = '⚠️ AR.js 載入超時<br>請重新載入頁面或檢查網絡連接<br>如果問題持續，可能是 CDN 問題';
-                        errorStatus.classList.add('show');
-                    }
-                }
-            }, 100);
-        });
+        // 簡化初始化檢查 - 不依賴 AR.js 組件註冊狀態
+        // AR.js 可能在運行時才完全初始化
 
-        // 開始按鈕點擊事件
+        // 開始按鈕點擊事件 - 簡化版本
         document.getElementById('startButton').addEventListener('click', async function() {
             // 隱藏遮罩層
             document.getElementById('startOverlay').classList.add('hidden');
             initializeAudio();
             
-            // 先獲取相機權限（這會觸發瀏覽器權限提示）
+            // 獲取相機權限
             try {
                 console.log('Requesting camera permission...');
                 const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -552,114 +551,43 @@
                 });
                 console.log('Camera permission granted');
                 
-                // 獲取權限後，立即停止這個測試流
-                // AR.js 會自己重新獲取相機
+                // 停止測試流，讓 AR.js 自己獲取
                 stream.getTracks().forEach(track => track.stop());
                 
-                // 確保場景已載入
-                const scene = document.querySelector('a-scene');
-                
                 // 等待場景載入
-                const waitForScene = () => {
-                    return new Promise((resolve) => {
-                        if (scene.hasLoaded) {
-                            resolve();
-                        } else {
-                            scene.addEventListener('loaded', resolve, { once: true });
-                        }
-                    });
-                };
-                
-                await waitForScene();
-                console.log('Scene loaded, initializing AR...');
-                
-                // 等待 AR.js 系統初始化
-                const waitForARSystem = () => {
-                    return new Promise((resolve) => {
-                        let attempts = 0;
-                        const checkInterval = setInterval(() => {
-                            attempts++;
-                            if (scene.systems && scene.systems.arjs) {
-                                clearInterval(checkInterval);
-                                resolve();
-                            } else if (attempts > 30) {
-                                clearInterval(checkInterval);
-                                resolve(); // 即使沒找到也繼續
-                            }
-                        }, 100);
-                    });
-                };
-                
-                await waitForARSystem();
-                
-                // 檢查 AR.js 系統是否存在
-                if (!scene.systems || !scene.systems.arjs) {
-                    console.error('AR.js system not found!');
-                    const errorStatus = document.getElementById('errorStatus');
-                    if (errorStatus) {
-                        errorStatus.innerHTML = '⚠️ AR.js 系統未找到<br>請確認 AR.js 已正確載入<br>嘗試重新載入頁面';
-                        errorStatus.classList.add('show');
+                const scene = document.querySelector('a-scene');
+                await new Promise((resolve) => {
+                    if (scene.hasLoaded) {
+                        resolve();
+                    } else {
+                        scene.addEventListener('loaded', resolve, { once: true });
                     }
-                    return;
+                });
+                
+                console.log('Scene loaded');
+                
+                // 等待 AR.js 系統（最多 5 秒）
+                let arSystemFound = false;
+                for (let i = 0; i < 50; i++) {
+                    if (scene.systems && scene.systems.arjs) {
+                        arSystemFound = true;
+                        console.log('AR.js system found');
+                        break;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
                 
-                // 強制初始化 AR Context
-                const arSystem = scene.systems.arjs;
-                console.log('AR.js system found, forcing context initialization...');
-                    
-                    // 嘗試多種方式初始化
-                    if (!arSystem.arContext) {
-                        console.log('AR Context not found, forcing initialization...');
-                        
-                        // 方法1: 直接訪問 AR.js 的初始化方法
-                        if (arSystem._onARjsReady) {
-                            try {
-                                arSystem._onARjsReady();
-                            } catch (e) {
-                                console.error('_onARjsReady failed:', e);
-                            }
-                        }
-                        
-                        // 方法2: 觸發場景事件
-                        scene.emit('arjs-video-loaded');
-                        scene.emit('arjs-nft-loaded');
-                        scene.emit('arjs-ready');
-                        
-                        // 方法3: 嘗試直接初始化 ARSource
-                        if (arSystem._arSource) {
-                            console.log('Found _arSource, trying to initialize...');
-                        }
-                        
-                        // 方法4: 強制觸發 AR.js 組件的 init 方法
-                        const arjsComponent = scene.components.arjs;
-                        if (arjsComponent && typeof arjsComponent.init === 'function') {
-                            try {
-                                arjsComponent.init();
-                            } catch (e) {
-                                console.error('arjs component init failed:', e);
-                            }
-                        }
-                        
-                        // 方法5: 嘗試手動創建 ARSource
-                        if (typeof ARjs !== 'undefined' && ARjs.ARController) {
-                            console.log('ARjs library found, attempting manual initialization...');
-                            try {
-                                // 這可能需要更多配置
-                            } catch (e) {
-                                console.error('Manual ARjs init failed:', e);
-                            }
-                        }
-                    } else {
-                        console.log('AR Context already exists');
-                    }
+                if (!arSystemFound) {
+                    console.warn('AR.js system not found, but continuing anyway');
+                }
                 
-                // 給 AR.js 更多時間初始化
+                // 直接啟動 AR 檢查（不依賴 AR Context 狀態）
                 setTimeout(() => {
                     startAR();
-                }, 2000);
+                }, 1000);
                 
             } catch (error) {
-                console.error('Camera access denied or failed:', error);
+                console.error('Camera access failed:', error);
                 alert('需要相機權限才能使用 AR 功能。請允許瀏覽器存取您的相機。\n\n錯誤：' + error.message);
             }
         });
@@ -690,126 +618,52 @@
         }
 
         function startAR() {
-            const scene = document.querySelector('a-scene');
             const loadingStatus = document.getElementById('loadingStatus');
             
             loadingStatus.classList.add('show');
             loadingStatus.textContent = '正在啟動相機...';
             
-            // 先快速檢查一次，如果相機已經在運行，立即認為就緒
-            if (isCameraRunning()) {
-                console.log('Camera already running, AR is ready');
-                loadingStatus.textContent = 'AR 已就緒！';
-                setTimeout(() => {
-                    loadingStatus.classList.remove('show');
-                    // 顯示掃描提示
-                    updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
-                }, 2000);
-                return;
-            }
-            
-            // 等待 AR.js 系統初始化
+            // 簡化邏輯：只要相機在運行就認為就緒
             let checkCount = 0;
-            const maxChecks = 40; // 最多檢查 20 秒 (40 * 500ms)
+            const maxChecks = 20; // 最多檢查 10 秒
             
             const checkInterval = setInterval(() => {
                 checkCount++;
                 
-                // 每次檢查都先看看相機是否已經在運行
+                // 檢查相機是否在運行
                 if (isCameraRunning()) {
                     console.log('Camera is running, AR is ready');
                     loadingStatus.textContent = 'AR 已就緒！';
+                    clearInterval(checkInterval);
+                    
                     setTimeout(() => {
                         loadingStatus.classList.remove('show');
-                    }, 2000);
-                    clearInterval(checkInterval);
+                        updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+                        // 開始顯示調試信息
+                        updateDebugInfo();
+                        setInterval(updateDebugInfo, 1000);
+                    }, 1500);
                     return;
                 }
                 
-                const arSystem = scene.systems.arjs;
-                
-                if (arSystem) {
-                    const arContext = arSystem.arContext;
-                    
-                    // 多種方式檢查 AR 是否已初始化
-                    let isInitialized = false;
-                    
-                    // 方法1: 檢查 arSource
-                    if (arContext) {
-                        if (arContext._arSource || arContext.arSource) {
-                            isInitialized = true;
-                            console.log('AR initialized: arSource found');
-                        }
-                        
-                        // 方法2: 檢查視頻元素
-                        if (arContext._video) {
-                            const video = arContext._video;
-                            if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
-                                isInitialized = true;
-                                console.log('AR initialized: video ready', video.videoWidth, 'x', video.videoHeight);
-                            }
-                        }
-                    }
-                    
-                    if (isInitialized) {
-                        console.log('AR source initialized successfully');
-                        loadingStatus.textContent = 'AR 已就緒！';
-                        setTimeout(() => {
-                            loadingStatus.classList.remove('show');
-                            // 顯示掃描提示
-                            updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
-                            // 開始顯示調試信息
-                            updateDebugInfo();
-                            setInterval(updateDebugInfo, 1000);
-                        }, 2000);
-                        clearInterval(checkInterval);
-                    } else {
-                        // 顯示進度
-                        if (checkCount % 4 === 0) {
-                            const seconds = Math.floor(checkCount * 0.5);
-                            loadingStatus.textContent = `正在啟動相機... (${seconds}秒)`;
-                            
-                            // 輸出調試信息（每 2 秒一次）
-                            if (checkCount % 4 === 0 && arContext) {
-                                console.log('AR context exists, checking initialization...', {
-                                    hasArSource: !!(arContext._arSource || arContext.arSource),
-                                    hasVideo: !!arContext._video,
-                                    videoReady: arContext._video ? arContext._video.readyState : 'N/A',
-                                    videoSize: arContext._video ? `${arContext._video.videoWidth}x${arContext._video.videoHeight}` : 'N/A',
-                                    cameraRunning: isCameraRunning()
-                                });
-                            }
-                        }
-                    }
-                } else {
-                    if (checkCount === 1) {
-                        console.error('AR.js system not found');
-                    }
+                // 顯示進度
+                if (checkCount % 2 === 0) {
+                    const seconds = Math.floor(checkCount * 0.5);
+                    loadingStatus.textContent = `正在啟動相機... (${seconds}秒)`;
                 }
                 
-                // 超時處理 - 如果相機已經在運行，就認為已經就緒
+                // 超時處理
                 if (checkCount >= maxChecks) {
                     clearInterval(checkInterval);
+                    console.log('Timeout reached, but proceeding anyway');
+                    loadingStatus.textContent = 'AR 已就緒！';
                     
-                    // 最後一次檢查：如果相機已經在運行，就認為已經就緒
-                    if (isCameraRunning()) {
-                        console.log('Camera is running at timeout, considering AR as ready');
-                        loadingStatus.textContent = 'AR 已就緒！';
-                        setTimeout(() => {
-                            loadingStatus.classList.remove('show');
-                            // 顯示掃描提示
-                            updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
-                        }, 2000);
-                    } else {
-                        // 即使超時，也自動隱藏提示，因為可能已經可以使用了
-                        loadingStatus.textContent = 'AR 已就緒！';
-                        console.log('Timeout reached, but hiding status - AR may be functional');
-                        setTimeout(() => {
-                            loadingStatus.classList.remove('show');
-                            // 顯示掃描提示
-                            updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
-                        }, 2000);
-                    }
+                    setTimeout(() => {
+                        loadingStatus.classList.remove('show');
+                        updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+                        updateDebugInfo();
+                        setInterval(updateDebugInfo, 1000);
+                    }, 1500);
                 }
             }, 500);
         }
