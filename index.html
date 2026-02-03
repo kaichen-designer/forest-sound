@@ -592,13 +592,25 @@
             }
         });
 
-        // 檢查相機是否正在運行
+        // 檢查相機是否正在運行（更嚴格的檢查）
         function isCameraRunning() {
             // 檢查所有視頻元素
             const videoElements = document.querySelectorAll('video');
             for (let video of videoElements) {
-                if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
-                    return true;
+                // 確保視頻不僅載入，還要真正在播放且不是暫停狀態
+                if (video.readyState >= 2 && 
+                    video.videoWidth > 0 && 
+                    video.videoHeight > 0 &&
+                    !video.paused) {
+                    // 檢查視頻流是否真的在運行
+                    const stream = video.srcObject;
+                    if (stream && stream.active) {
+                        return true;
+                    }
+                    // 如果沒有 stream，至少檢查視頻尺寸和播放狀態
+                    if (video.videoWidth > 0 && !video.paused) {
+                        return true;
+                    }
                 }
             }
             
@@ -608,7 +620,10 @@
                 const arContext = scene.systems.arjs.arContext;
                 if (arContext && arContext._video) {
                     const video = arContext._video;
-                    if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+                    if (video.readyState >= 2 && 
+                        video.videoWidth > 0 && 
+                        video.videoHeight > 0 &&
+                        !video.paused) {
                         return true;
                     }
                 }
@@ -619,51 +634,104 @@
 
         function startAR() {
             const loadingStatus = document.getElementById('loadingStatus');
+            const scene = document.querySelector('a-scene');
             
             loadingStatus.classList.add('show');
             loadingStatus.textContent = '正在啟動相機...';
             
-            // 簡化邏輯：只要相機在運行就認為就緒
             let checkCount = 0;
-            const maxChecks = 20; // 最多檢查 10 秒
+            const maxChecks = 40; // 最多檢查 20 秒
             
             const checkInterval = setInterval(() => {
                 checkCount++;
                 
-                // 檢查相機是否在運行
-                if (isCameraRunning()) {
-                    console.log('Camera is running, AR is ready');
-                    loadingStatus.textContent = 'AR 已就緒！';
-                    clearInterval(checkInterval);
+                // 檢查相機是否真正在運行（更嚴格的檢查）
+                const cameraRunning = isCameraRunning();
+                
+                // 同時檢查 AR.js 系統和視頻流
+                const hasARSystem = scene.systems && scene.systems.arjs;
+                const hasVideoStream = cameraRunning;
+                
+                // 只有當相機真正在運行時才認為就緒
+                if (hasVideoStream) {
+                    // 再次確認視頻元素真的在播放
+                    const videoElements = document.querySelectorAll('video');
+                    let videoPlaying = false;
+                    for (let video of videoElements) {
+                        if (video.readyState >= 2 && 
+                            video.videoWidth > 0 && 
+                            video.videoHeight > 0 &&
+                            !video.paused) {
+                            videoPlaying = true;
+                            console.log('Video is playing:', video.videoWidth, 'x', video.videoHeight);
+                            break;
+                        }
+                    }
                     
-                    setTimeout(() => {
-                        loadingStatus.classList.remove('show');
-                        updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
-                        // 開始顯示調試信息
-                        updateDebugInfo();
-                        setInterval(updateDebugInfo, 1000);
-                    }, 1500);
-                    return;
+                    if (videoPlaying) {
+                        console.log('Camera is running and video is playing, AR is ready');
+                        loadingStatus.textContent = 'AR 已就緒！';
+                        clearInterval(checkInterval);
+                        
+                        setTimeout(() => {
+                            loadingStatus.classList.remove('show');
+                            updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+                            // 開始顯示調試信息
+                            updateDebugInfo();
+                            setInterval(updateDebugInfo, 1000);
+                        }, 1500);
+                        return;
+                    }
                 }
                 
                 // 顯示進度
                 if (checkCount % 2 === 0) {
                     const seconds = Math.floor(checkCount * 0.5);
                     loadingStatus.textContent = `正在啟動相機... (${seconds}秒)`;
+                    
+                    // 每 2 秒輸出一次狀態
+                    if (checkCount % 4 === 0) {
+                        console.log('AR initialization status:', {
+                            hasARSystem: hasARSystem,
+                            hasVideoStream: hasVideoStream,
+                            checkCount: checkCount
+                        });
+                    }
                 }
                 
-                // 超時處理
+                // 超時處理 - 即使超時也要檢查相機是否真的在運行
                 if (checkCount >= maxChecks) {
                     clearInterval(checkInterval);
-                    console.log('Timeout reached, but proceeding anyway');
-                    loadingStatus.textContent = 'AR 已就緒！';
                     
+                    // 最後一次嚴格檢查
+                    if (isCameraRunning()) {
+                        const videoElements = document.querySelectorAll('video');
+                        for (let video of videoElements) {
+                            if (video.readyState >= 2 && video.videoWidth > 0 && !video.paused) {
+                                console.log('Camera confirmed running at timeout');
+                                loadingStatus.textContent = 'AR 已就緒！';
+                                setTimeout(() => {
+                                    loadingStatus.classList.remove('show');
+                                    updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
+                                    updateDebugInfo();
+                                    setInterval(updateDebugInfo, 1000);
+                                }, 1500);
+                                return;
+                            }
+                        }
+                    }
+                    
+                    // 如果超時且相機未運行，顯示錯誤
+                    console.warn('Timeout: Camera not running');
+                    loadingStatus.textContent = '相機啟動超時';
                     setTimeout(() => {
                         loadingStatus.classList.remove('show');
-                        updateScanStatus('📷 請將攝像頭對準 Marker 6 或 Marker 12', 'scanning');
-                        updateDebugInfo();
-                        setInterval(updateDebugInfo, 1000);
-                    }, 1500);
+                        const errorStatus = document.getElementById('errorStatus');
+                        if (errorStatus) {
+                            errorStatus.innerHTML = '⚠️ 相機啟動失敗<br>請重新載入頁面並允許相機權限';
+                            errorStatus.classList.add('show');
+                        }
+                    }, 2000);
                 }
             }, 500);
         }
