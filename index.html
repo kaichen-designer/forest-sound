@@ -528,36 +528,46 @@
         // 簡化初始化檢查 - 不依賴 AR.js 組件註冊狀態
         // AR.js 可能在運行時才完全初始化
 
-        // 開始按鈕點擊事件 - 最簡化版本，讓 AR.js 自己處理
-        document.getElementById('startButton').addEventListener('click', function() {
+        // 開始按鈕點擊事件 - 先獲取相機權限，然後讓 AR.js 處理
+        document.getElementById('startButton').addEventListener('click', async function() {
             // 隱藏遮罩層
             document.getElementById('startOverlay').classList.add('hidden');
             initializeAudio();
             
-            // 等待場景載入
-            const scene = document.querySelector('a-scene');
-            
-            // 場景載入後設置事件
-            if (scene.hasLoaded) {
-                setupAfterSceneLoad();
-            } else {
-                scene.addEventListener('loaded', setupAfterSceneLoad, { once: true });
+            try {
+                // 先獲取相機權限（觸發瀏覽器權限提示）
+                console.log('Requesting camera permission...');
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } 
+                });
+                console.log('Camera permission granted');
+                
+                // 立即停止測試流，讓 AR.js 自己獲取
+                stream.getTracks().forEach(track => track.stop());
+                
+                // 等待場景載入
+                const scene = document.querySelector('a-scene');
+                await new Promise((resolve) => {
+                    if (scene.hasLoaded) {
+                        resolve();
+                    } else {
+                        scene.addEventListener('loaded', resolve, { once: true });
+                    }
+                });
+                
+                console.log('Scene loaded');
+                
+                // 給 AR.js 時間來獲取相機流
+                setTimeout(() => {
+                    setupMarkerEvents();
+                    startAR();
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Camera access failed:', error);
+                alert('需要相機權限才能使用 AR 功能。請允許瀏覽器存取您的相機。');
             }
         });
-        
-        // 場景載入後的設置
-        function setupAfterSceneLoad() {
-            console.log('Scene loaded, setting up...');
-            
-            // 等待一下讓 AR.js 初始化
-            setTimeout(() => {
-                // 設置 Marker 事件
-                setupMarkerEvents();
-                
-                // 啟動 AR 檢查
-                startAR();
-            }, 2000);
-        }
 
         // 檢查相機是否正在運行（更嚴格的檢查）
         function isCameraRunning() {
